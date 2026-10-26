@@ -247,7 +247,7 @@ wrap.addEventListener("click",openEnv);
 wrap.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();openEnv();}});
 $("back").addEventListener("click",function(e){e.preventDefault();$("main").hidden=true;wrap.classList.remove("open");$("env").hidden=false;window.scrollTo(0,0);});
 // RSVP and voting. Everything is saved to your Google Sheet (see SHEET_URL at the top).
-var items=["Diapers","Wipes","Baby wash","Onesies","Bottles","Blankets","Burp cloths","Pacifiers","Baby lotion","Food or drinks","Just me, no gift"];
+var items=["Diapers","Wipes","Baby wash","Unisex-Onesies","Bottles","Pillows & Blankets","Burp cloths","Pacifiers","Baby lotion","Baby-Food or drinks","Peaboo Baby Products"];
 items.forEach(function(t){var l=document.createElement("label");l.className="chip";l.innerHTML='<input type="checkbox" value="'+t+'"><span>'+t+'</span>';$("chips").appendChild(l);});
 var f=$("f"),msg="",names={pink:"Team Girl",blue:"Team Boy"},vdb=null;
 function post(type,data){data.type=type;return fetch(SHEET_URL,{method:"POST",body:JSON.stringify(data)}).then(function(r){return r.json();});}
