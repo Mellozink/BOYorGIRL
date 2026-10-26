@@ -105,6 +105,13 @@ form{display:grid;gap:16px}
 .actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
 .conf{position:fixed;top:-20px;width:10px;height:16px;z-index:50;pointer-events:none;animation:fall 2.8s ease-in forwards}
 @keyframes fall{to{transform:translate(var(--dx),105vh) rotate(720deg)}}
+.pill{display:inline-block;padding:1px 12px;border-radius:999px;font-weight:700;font-size:.95rem}
+.pill.y{background:var(--pink)}.pill.n{background:#e5e3df}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center;margin-top:12px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 4px;font-size:1rem}.stat b{display:block;font-size:1.9rem;line-height:1.1}
+.glist{display:grid;gap:10px;margin:14px 0 0;padding:0;list-style:none}
+.glist li{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.glist small{display:block;color:#7a746a;font-size:1rem}
 .note{text-align:center;color:var(--note);padding:22px 20px 40px;font-size:1.05rem}
 .note a{color:inherit}
 @media (max-width:520px){.row{grid-template-columns:1fr}.invite>.bow{width:66px;height:87px}.invite>.b1{left:-8px}.invite>.b2{right:-8px}}
@@ -141,7 +148,7 @@ form{display:grid;gap:16px}
 <h1 class="script xl">Gender Reveal</h1>
 <p class="caps">Honoring the parents-to-be</p>
 <p class="script md">Dave &amp; Charisse</p>
-<p class="place">Saturday, November 15, 2026 at 10:00 AM<br>Residencia de Matiga<br>Merida, Leyte<br>(Note: Wear Something White.)</p>
+<p class="place">Saturday, November 15, 2026 at 10:00 AM<br>Residencia de Matiga<br>Merida, Leyte</p>
 </article>
 
 <div class="duo">
@@ -166,7 +173,7 @@ form{display:grid;gap:16px}
 <div><label class="f" for="vname">Your name</label><input id="vname" type="text" autocomplete="name"></div>
 <div><label class="f" for="vphone">Phone number</label><input id="vphone" type="text" inputmode="tel" autocomplete="tel"></div>
 </div>
-<p class="hint" style="margin:0">One vote per phone number. We keep a scrambled version of your number, not the number itself.</p>
+<p class="hint" style="margin:0">One vote per phone number. Only Dave &amp; Charisse can see it.</p>
 <p class="err" id="verr" role="alert"></p>
 <button class="btn" type="submit" id="vbtn">Save my vote</button>
 <div id="results" aria-live="polite">
@@ -195,6 +202,7 @@ form{display:grid;gap:16px}
 <div><label class="f" for="note">Comments</label><input id="note" type="text" placeholder="Allergies, a message, a baby name idea"></div>
 <p class="err" id="err" role="alert"></p>
 <button class="btn" type="submit">RSVP</button>
+<p class="center" id="saved" style="margin:0;font-weight:700"></p>
 <div class="out" id="out" aria-live="polite"></div>
 <div class="actions" id="act" hidden>
 <button class="btn" type="button" id="copy">Copy message</button>
@@ -202,12 +210,23 @@ form{display:grid;gap:16px}
 </div>
 </form>
 </section>
+<section id="host" class="paper" hidden>
+<p class="script md center">Guest list</p>
+<p class="hint center" style="margin-top:0">Only you can see this section.</p>
+<div class="stats"><div class="stat"><b id="sy">0</b>Going</div><div class="stat"><b id="sn">0</b>Can’t make it</div><div class="stat"><b id="sg">0</b>Total guests</div></div>
+<p id="stot" class="center" style="margin:14px 0 0"></p>
+<ul class="glist" id="glist"></ul>
+<p class="center" style="margin:22px 0 0;font-weight:700">Votes</p>
+<ul class="glist" id="vlist" style="margin-top:8px"></ul>
+</section>
 <p class="note"><a href="#" id="back">Back to envelope</a><br><br>Questions? Call or text Dave &amp; Charisse at <a href="tel:09659865293">0965 986 5293</a>.</p>
 </div>
 </div>
 
 <script>
 var HOST_PHONE="09659865293";
+// Paste your Google Apps Script web app URL between the quotes (see setup steps). Votes and RSVPs are saved to your Google Sheet.
+var SHEET_URL="https://script.google.com/macros/s/AKfycbz6LNXI3kKSxzT60QNXtExeAAzxVeKF5fpni28qYtZzpQIAtkSNmjGBqDeTx8nWzh-o/exec";
 var $=function(i){return document.getElementById(i)};
 var cancel=false;
 ["wheel","touchstart","keydown"].forEach(function(ev){window.addEventListener(ev,function(){cancel=true;},{passive:true});});
@@ -227,41 +246,59 @@ function openEnv(){
 wrap.addEventListener("click",openEnv);
 wrap.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();openEnv();}});
 $("back").addEventListener("click",function(e){e.preventDefault();$("main").hidden=true;wrap.classList.remove("open");$("env").hidden=false;window.scrollTo(0,0);});
-// RSVP
-var items=["Diapers","Wipes","Baby wash","Unisex-Onesies","Bottles","Pillows & Blankets","Burp cloths","Pacifiers","Baby lotion","Baby Food & Drinks","Peaboo Baby Products"];
+// RSVP and voting. Everything is saved to your Google Sheet (see SHEET_URL at the top).
+var items=["Diapers","Wipes","Baby wash","Onesies","Bottles","Blankets","Burp cloths","Pacifiers","Baby lotion","Food or drinks","Just me, no gift"];
 items.forEach(function(t){var l=document.createElement("label");l.className="chip";l.innerHTML='<input type="checkbox" value="'+t+'"><span>'+t+'</span>';$("chips").appendChild(l);});
-var f=$("f"),msg="",names={pink:"Team Girl",blue:"Team Boy"};
+var f=$("f"),msg="",names={pink:"Team Girl",blue:"Team Boy"},vdb=null;
+function post(type,data){data.type=type;return fetch(SHEET_URL,{method:"POST",body:JSON.stringify(data)}).then(function(r){return r.json();});}
+function hashKey(s){
+  try{return crypto.subtle.digest("SHA-256",new TextEncoder().encode("reveal:"+s)).then(function(b){return Array.prototype.map.call(new Uint8Array(b),function(x){return ("0"+x.toString(16)).slice(-2)}).join("").slice(0,32)});}
+  catch(e){return Promise.resolve("p"+s);}
+}
+function saveRsvp(d){
+  if(SHEET_URL)return post("rsvp",d).then(function(r){if(!r||!r.ok)throw 0;});
+  if(vdb)return hashKey("n:"+d.name.toLowerCase()).then(function(h){return vdb.collection("rsvps").doc(h).set({name:d.name,coming:d.coming,guests:d.guests,bring:d.bring,note:d.note,team:d.team,at:Date.now()});});
+  return Promise.reject(0);
+}
 f.addEventListener("submit",function(e){
   e.preventDefault();
-  var name=$("name").value.trim(),c=f.querySelector('input[name=c]:checked');
+  var name=$("name").value.trim(),c=f.querySelector("input[name=c]:checked");
   if(!name){$("err").textContent="Add your name so we know who’s coming.";return;}
   if(!c){$("err").textContent="Tell us if you’re coming.";return;}
   $("err").textContent="";
   var yes=c.value==="yes",team=window.__myTeam||"Not voted yet";
   var bring=Array.prototype.map.call(f.querySelectorAll("#chips input:checked"),function(i){return i.value;});
-  var note=$("note").value.trim();
+  var note=$("note").value.trim(),sv=$("saved"),btn=f.querySelector("button[type=submit]");
   msg="RSVP: "+(yes?"I’ll be there! 🎉":"I can’t make it this time.")+"\nName: "+name+(yes?"\nGuests: "+$("n").value+"\nMy vote: "+team+"\nBringing: "+(bring.length?bring.join(", "):"Nothing yet"):"")+(note?"\nComments: "+note:"");
-  $("out").textContent=msg;$("out").className="out on";$("act").hidden=false;
-  $("sms").href="sms:"+HOST_PHONE+"?&body="+encodeURIComponent(msg);
-  $("out").scrollIntoView({behavior:"smooth",block:"nearest"});
+  $("out").className="out";$("act").hidden=true;sv.textContent="Sending your RSVP...";btn.disabled=true;
+  saveRsvp({name:name,coming:yes,guests:yes?(parseInt($("n").value,10)||1):0,bring:yes?bring:[],note:note,team:team})
+  .then(function(){sv.textContent="Thank you, "+name+"! Your RSVP was sent to Dave & Charisse.";btn.textContent="RSVP sent";})
+  .catch(function(){
+    sv.textContent="We couldn’t send your RSVP. Please try again, or send it by text below.";
+    $("out").textContent=msg;$("out").className="out on";$("act").hidden=false;
+    $("sms").href="sms:"+HOST_PHONE+"?&body="+encodeURIComponent(msg);
+  }).then(function(){btn.disabled=false;});
 });
 $("copy").addEventListener("click",function(){var b=this;if(navigator.clipboard){navigator.clipboard.writeText(msg).then(function(){b.textContent="Copied";setTimeout(function(){b.textContent="Copy message";},1800);},function(){});}});
 // voting
-var vf=$("vf"),verr=$("verr"),vbtn=$("vbtn"),res=$("results"),vdb=null,subscribed=false;
-function hashPhone(s){
-  try{return crypto.subtle.digest("SHA-256",new TextEncoder().encode("reveal:"+s)).then(function(b){return Array.prototype.map.call(new Uint8Array(b),function(x){return ("0"+x.toString(16)).slice(-2)}).join("").slice(0,32)});}
-  catch(e){return Promise.resolve("p"+s);}
-}
-function render(snap){
-  var p=0,b=0;
-  snap.docs.forEach(function(d){var t=(d.data()||{}).team;if(t==="pink")p++;else if(t==="blue")b++;});
+var vf=$("vf"),verr=$("verr"),vbtn=$("vbtn"),res=$("results"),subscribed=false,poll=null;
+function showCounts(p,b){
   var tot=p+b||1,d=Math.abs(p-b);
   $("cp").textContent=p+(p===1?" vote":" votes");$("cb").textContent=b+(b===1?" vote":" votes");
   $("bp").style.width=(p/tot*100)+"%";$("bb").style.width=(b/tot*100)+"%";
   $("lead").textContent=p===b?(p?"It’s a tie!":"No votes yet"):(p>b?"Team Girl":"Team Boy")+" is ahead by "+d+(d===1?" vote":" votes");
 }
+function render(snap){
+  var p=0,b=0;
+  snap.docs.forEach(function(d){var t=(d.data()||{}).team;if(t==="pink")p++;else if(t==="blue")b++;});
+  showCounts(p,b);
+}
+function loadResults(){
+  fetch(SHEET_URL+"?action=results").then(function(r){return r.json();}).then(function(r){showCounts(r.pink||0,r.blue||0);}).catch(function(){$("lead").textContent="Results are unavailable right now.";});
+}
 function reveal(){
   res.className="on";
+  if(SHEET_URL){loadResults();if(!poll)poll=setInterval(loadResults,15000);return;}
   if(vdb&&!subscribed){subscribed=true;vdb.collection("votes").onSnapshot(render,function(){$("lead").textContent="Results are unavailable right now.";});}
 }
 function confetti(){
@@ -272,10 +309,13 @@ function confetti(){
     document.body.appendChild(c);setTimeout(function(el){el.remove();}.bind(null,c),3600);}
 }
 function setTeam(t){window.__myTeam=names[t];}
-if(window.claude&&claude.use){claude.use("db").then(function(d){
+function voted(v){setTeam(v);try{localStorage.setItem("revealVote",v);}catch(e){}vbtn.textContent="Vote saved";confetti();reveal();}
+function already(t){setTeam(t);verr.textContent="This number already voted for "+names[t]+".";reveal();}
+try{var saved=localStorage.getItem("revealVote");if(saved&&SHEET_URL){setTeam(saved);reveal();}}catch(e){}
+if(!SHEET_URL&&window.claude&&claude.use){claude.use("db").then(function(d){
   vdb=d;
   if(!d){verr.textContent="Voting needs you to be signed in to view this page.";return;}
-  try{var saved=localStorage.getItem("revealVote");if(saved){setTeam(saved);reveal();}}catch(e){}
+  try{var sv=localStorage.getItem("revealVote");if(sv){setTeam(sv);reveal();}}catch(e){}
 }).catch(function(){});}
 vf.addEventListener("submit",function(e){
   e.preventDefault();
@@ -283,19 +323,53 @@ vf.addEventListener("submit",function(e){
   if(!pick){verr.textContent="Tap Team Girl or Team Boy.";return;}
   if(!name){verr.textContent="Add your name.";return;}
   if(digits.length<7){verr.textContent="Enter a phone number with at least 7 digits.";return;}
-  if(!vdb){verr.textContent="Voting isn’t available here. Open the invitation while signed in.";return;}
+  if(!SHEET_URL&&!vdb){verr.textContent="Voting isn’t available yet. Please try again later.";return;}
   verr.textContent="";vbtn.disabled=true;
-  hashPhone(digits).then(function(h){
-    var ref=vdb.collection("votes").doc(h);
-    return ref.get().then(function(s){
-      if(s.exists){var t=(s.data()||{}).team;setTeam(t);verr.textContent="This number already voted for "+names[t]+".";reveal();return;}
-      return ref.set({team:pick.value,name:name,at:Date.now()}).then(function(){
-        setTeam(pick.value);try{localStorage.setItem("revealVote",pick.value);}catch(e){}
-        vbtn.textContent="Vote saved";confetti();reveal();
+  var job;
+  if(SHEET_URL){
+    job=post("vote",{name:name,phone:digits,team:pick.value}).then(function(r){
+      if(!r||!r.ok)throw 0;
+      if(r.duplicate)already(r.team);else voted(pick.value);
+    });
+  }else{
+    job=hashKey(digits).then(function(h){
+      var ref=vdb.collection("votes").doc(h);
+      return ref.get().then(function(s){
+        if(s.exists){already((s.data()||{}).team);return;}
+        return ref.set({team:pick.value,name:name,at:Date.now()}).then(function(){voted(pick.value);});
       });
     });
-  }).catch(function(){verr.textContent="Couldn’t save your vote. Check your connection and try again.";}).then(function(){vbtn.disabled=false;});
+  }
+  job.catch(function(){verr.textContent="Couldn’t save your vote. Check your connection and try again.";}).then(function(){vbtn.disabled=false;});
 });
+function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!==undefined)e.textContent=x;return e;}
+function hostInit(db){
+  $("host").hidden=false;
+  db.collection("rsvps").onSnapshot(function(snap){
+    var y=0,n=0,g=0,tally={},list=$("glist");list.textContent="";
+    var docs=snap.docs.map(function(d){return d.data()||{};}).sort(function(a,b){return (b.at||0)-(a.at||0);});
+    docs.forEach(function(r){
+      if(r.coming){y++;g+=r.guests||1;(r.bring||[]).forEach(function(b){tally[b]=(tally[b]||0)+1;});}else n++;
+      var li=el("li"),top=el("div");
+      top.appendChild(el("b",null,r.name||"Guest"));top.appendChild(document.createTextNode(" "));
+      top.appendChild(el("span","pill "+(r.coming?"y":"n"),r.coming?"Going":"Can’t make it"));
+      li.appendChild(top);
+      if(r.coming){li.appendChild(el("small",null,(r.guests||1)+((r.guests||1)===1?" guest":" guests")+(r.bring&&r.bring.length?". Bringing: "+r.bring.join(", "):"")));}
+      if(r.note)li.appendChild(el("small",null,"Comment: "+r.note));
+      list.appendChild(li);
+    });
+    if(!docs.length)list.appendChild(el("li",null,"No RSVPs yet."));
+    $("sy").textContent=y;$("sn").textContent=n;$("sg").textContent=g;
+    var tk=Object.keys(tally).sort(function(a,b){return tally[b]-tally[a];});
+    $("stot").textContent=tk.length?"Bringing so far: "+tk.map(function(k){return k+" ("+tally[k]+")";}).join(", "):"";
+  },function(){$("glist").textContent="Couldn’t load the guest list.";});
+  db.collection("votes").onSnapshot(function(snap){
+    var v=$("vlist");v.textContent="";
+    snap.docs.map(function(d){return d.data()||{};}).sort(function(a,b){return (b.at||0)-(a.at||0);}).forEach(function(r){v.appendChild(el("li",null,(r.name||"Guest")+": "+(r.team==="pink"?"Team Girl":"Team Boy")));});
+    if(!snap.docs.length)v.appendChild(el("li",null,"No votes yet."));
+  });
+}
+if(!SHEET_URL&&window.claude&&claude.use){Promise.all([claude.use("db"),claude.use("user")]).then(function(r){if(r[0]&&r[1]&&(r[1].isOwner()||r[1].canEdit()))hostInit(r[0]);}).catch(function(){});}
 </script>
 </body>
 </html>
